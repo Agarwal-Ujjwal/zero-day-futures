@@ -59,6 +59,17 @@ module zero_day_futures::collateral {
         move_to(deployer, FaucetHistory { last_claim_at: table::new() });
     }
 
+    #[test_only]
+    /// Other modules' tests need this package initialized too, but `init_module`
+    /// itself is private (the framework calls it automatically at publish time on
+    /// real networks, which never happens inside a unit test).
+    public fun init_module_for_test(deployer: &signer) {
+        init_module(deployer);
+    }
+
+    #[test_only]
+    public fun faucet_claim_amount(): u64 { FAUCET_AMOUNT }
+
     /// The mUSDC fungible asset's metadata object. `vault` and anything else that
     /// needs to name this asset calls this instead of hardcoding its address.
     public fun metadata(): Object<Metadata> {
