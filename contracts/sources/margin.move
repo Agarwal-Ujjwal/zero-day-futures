@@ -94,6 +94,23 @@ module zero_day_futures::margin {
         (((amount as u128) * (bps as u128)) / (config::bps_denominator() as u128) as u64)
     }
 
+    /// Adds two signed magnitudes, e.g. a position's already-realized PnL and a
+    /// newly-realized delta from closing part of it. There is no signed
+    /// integer type to fall back on, so every caller that accumulates PnL over
+    /// time (today: `clearing`) goes through this instead of reimplementing
+    /// sign handling itself.
+    public fun combine_signed(
+        a_is_negative: bool, a_magnitude: u64, b_is_negative: bool, b_magnitude: u64,
+    ): (bool, u64) {
+        if (a_is_negative == b_is_negative) {
+            (a_is_negative, a_magnitude + b_magnitude)
+        } else if (a_magnitude >= b_magnitude) {
+            (a_is_negative, a_magnitude - b_magnitude)
+        } else {
+            (b_is_negative, b_magnitude - a_magnitude)
+        }
+    }
+
     #[test_only]
     const TEST_PRICE_UNIT: u64 = 1_000_000;
     #[test_only]
@@ -172,5 +189,23 @@ module zero_day_futures::margin {
         let entry = 65_000 * TEST_PRICE_UNIT;
         let settlement = 50_000 * TEST_PRICE_UNIT; // loss of 15_000 * unit, far exceeds margin
         assert!(settlement_payout(margin_amount, entry, settlement, TEST_LOT_UNIT, SIDE_LONG) == 0, 0);
+    }
+
+    #[test]
+    fun test_combine_signed_same_sign_adds_magnitudes() {
+        let (is_negative, magnitude) = combine_signed(true, 100, true, 50);
+        assert!(is_negative, 0);
+        assert!(magnitude == 150, 1);
+    }
+
+    #[test]
+    fun test_combine_signed_opposite_sign_nets_out() {
+        let (is_negative, magnitude) = combine_signed(true, 100, false, 60);
+        assert!(is_negative, 0);
+        assert!(magnitude == 40, 1);
+
+        let (is_negative2, magnitude2) = combine_signed(true, 40, false, 100);
+        assert!(!is_negative2, 2);
+        assert!(magnitude2 == 60, 3);
     }
 }

@@ -13,10 +13,11 @@ module zero_day_futures::vault {
     use zero_day_futures::config;
     use zero_day_futures::events;
 
-    // `friend` declarations for `clearing`, `orders`, `liquidation` and
-    // `settlement` are added here as each of those modules is implemented - Move
-    // rejects a `friend` declaration for a module that doesn't exist yet, and
-    // none of them do, this early in the build order.
+    friend zero_day_futures::clearing;
+    // `friend` declarations for `orders`, `liquidation` and `settlement` are
+    // added here as each of those modules is implemented - Move rejects a
+    // `friend` declaration for a module that doesn't exist yet, and none of
+    // them do, this early in the build order.
 
     /// Fixed seed for the named object that owns the pooled custody store, so its
     /// address can always be re-derived from `@zero_day_futures`.
@@ -55,6 +56,14 @@ module zero_day_futures::vault {
             free_balances: table::new(),
             insurance_fund: 0,
         });
+    }
+
+    #[test_only]
+    /// Other modules' tests need the vault initialized too, but `init_module`
+    /// itself is private (the framework calls it automatically at publish time
+    /// on real networks, which never happens inside a unit test).
+    public fun init_module_for_test(deployer: &signer) {
+        init_module(deployer);
     }
 
     fun vault_address(): address {

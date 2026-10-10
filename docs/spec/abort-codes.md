@@ -25,6 +25,7 @@ update this table in the same commit as any change to the Move enum.
 | `E_NOT_ADMIN` | `series::create_series`, `series::add_underlying`, `config::set_params` | Caller does not hold the admin capability |
 | `E_FAUCET_COOLDOWN` | `collateral::faucet_mint` | Caller already claimed the faucet within the last 24h |
 | `E_UNDERLYING_NOT_REGISTERED` | `series::roll_series` | Admin has not called `add_underlying` for this underlying yet |
+| `E_NO_OPEN_POSITION` | `clearing::add_margin` | Caller has no open position on this series to add margin to |
 
 ## Convention
 

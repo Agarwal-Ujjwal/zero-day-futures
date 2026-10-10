@@ -58,6 +58,7 @@ module zero_day_futures::config {
     const E_FILLS_CAP_EXCEEDED: u64 = 13;
     const E_FAUCET_COOLDOWN: u64 = 14;
     const E_UNDERLYING_NOT_REGISTERED: u64 = 15;
+    const E_NO_OPEN_POSITION: u64 = 16;
 
     // ---------------------------------------------------------------------
     // Admin capability
@@ -120,6 +121,7 @@ module zero_day_futures::config {
     public fun e_fills_cap_exceeded(): u64 { E_FILLS_CAP_EXCEEDED }
     public fun e_faucet_cooldown(): u64 { E_FAUCET_COOLDOWN }
     public fun e_underlying_not_registered(): u64 { E_UNDERLYING_NOT_REGISTERED }
+    public fun e_no_open_position(): u64 { E_NO_OPEN_POSITION }
 
     #[test(deployer = @zero_day_futures)]
     fun test_init_grants_admin_cap(deployer: &signer) {

@@ -10,7 +10,9 @@ module zero_day_futures::position {
     use aptos_std::table::{Self, Table};
     use zero_day_futures::margin;
 
-    // friends added as clearing/liquidation/settlement are implemented.
+    friend zero_day_futures::clearing;
+    // friend zero_day_futures::liquidation; // added once liquidation.move exists.
+    // friend zero_day_futures::settlement; // added once settlement.move exists.
 
     const STATUS_OPEN: u8 = 0;
     const STATUS_CLOSED: u8 = 1;
@@ -21,6 +23,19 @@ module zero_day_futures::position {
     public fun status_closed(): u8 { STATUS_CLOSED }
     public fun status_liquidated(): u8 { STATUS_LIQUIDATED }
     public fun status_settled(): u8 { STATUS_SETTLED }
+
+    /// Why a `PositionUpdated` event fired - shared across every module that
+    /// touches a position, so the DB mapper (docs/spec/events.md) can route on
+    /// one byte instead of re-deriving the cause from context.
+    const REASON_FILL: u8 = 0;
+    const REASON_ADD_MARGIN: u8 = 1;
+    const REASON_LIQUIDATION: u8 = 2;
+    const REASON_SETTLEMENT: u8 = 3;
+
+    public fun reason_fill(): u8 { REASON_FILL }
+    public fun reason_add_margin(): u8 { REASON_ADD_MARGIN }
+    public fun reason_liquidation(): u8 { REASON_LIQUIDATION }
+    public fun reason_settlement(): u8 { REASON_SETTLEMENT }
 
     /// One net position per (series, trader) - docs/spec/business-rules.md
     /// rules out flipping, so this never needs to represent more than one side.
