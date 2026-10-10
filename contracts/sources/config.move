@@ -57,6 +57,7 @@ module zero_day_futures::config {
     const E_OPEN_ORDER_CAP_EXCEEDED: u64 = 12;
     const E_FILLS_CAP_EXCEEDED: u64 = 13;
     const E_FAUCET_COOLDOWN: u64 = 14;
+    const E_UNDERLYING_NOT_REGISTERED: u64 = 15;
 
     // ---------------------------------------------------------------------
     // Admin capability
@@ -77,6 +78,14 @@ module zero_day_futures::config {
     /// Aborts with `E_NOT_ADMIN` unless `account` holds the admin capability.
     public fun assert_is_admin(account: &signer) {
         assert!(exists<AdminCap>(signer::address_of(account)), E_NOT_ADMIN);
+    }
+
+    #[test_only]
+    /// Other modules' tests need the admin capability granted too, but
+    /// `init_module` itself is private (the framework calls it automatically
+    /// at publish time on real networks, which never happens in a unit test).
+    public fun init_module_for_test(deployer: &signer) {
+        init_module(deployer);
     }
 
     // ---------------------------------------------------------------------
@@ -110,6 +119,7 @@ module zero_day_futures::config {
     public fun e_open_order_cap_exceeded(): u64 { E_OPEN_ORDER_CAP_EXCEEDED }
     public fun e_fills_cap_exceeded(): u64 { E_FILLS_CAP_EXCEEDED }
     public fun e_faucet_cooldown(): u64 { E_FAUCET_COOLDOWN }
+    public fun e_underlying_not_registered(): u64 { E_UNDERLYING_NOT_REGISTERED }
 
     #[test(deployer = @zero_day_futures)]
     fun test_init_grants_admin_cap(deployer: &signer) {
