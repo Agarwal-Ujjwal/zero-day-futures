@@ -3,8 +3,6 @@
 /// producing module gets `emit_*` access via `friend`; nothing outside this
 /// package can emit these events.
 ///
-/// This file grows alongside the modules that need it. `OrderPlaced` and
-/// `TradeExecuted` are added when `orders` and `matching` are implemented.
 module zero_day_futures::events {
     use std::string::String;
     use aptos_framework::event;
@@ -12,6 +10,8 @@ module zero_day_futures::events {
     friend zero_day_futures::vault;
     friend zero_day_futures::series;
     friend zero_day_futures::clearing;
+    friend zero_day_futures::orders;
+    friend zero_day_futures::matching;
 
     #[event]
     /// A trader moved collateral from their own wallet into vault custody.
@@ -53,6 +53,46 @@ module zero_day_futures::events {
         reason: u8,
     }
 
+    #[event]
+    /// A new order was submitted. `remaining` and `size` can differ: a
+    /// marketable order may already be partly or fully filled by the time
+    /// this fires, since it carries post-match state like every other event
+    /// here (docs/spec/events.md). There is no `status` field - the mapper
+    /// derives `open`/`partial`/`filled` by comparing `remaining` to `size`.
+    struct OrderPlaced has drop, store {
+        order_id: u64,
+        series_id: u64,
+        trader: address,
+        side: u8,
+        price: u64,
+        size: u64,
+        remaining: u64,
+        tif: u8,
+        reduce_only: bool,
+    }
+
+    #[event]
+    /// An existing order's remaining size or status changed - a fill against
+    /// it as a resting maker, or a cancellation. `status` is explicit here
+    /// (unlike `OrderPlaced`) because `cancelled` can't be inferred from
+    /// `remaining` alone.
+    struct OrderUpdated has drop, store {
+        order_id: u64,
+        remaining: u64,
+        status: u8,
+    }
+
+    #[event]
+    /// One matched fill between a resting maker and an incoming taker.
+    struct TradeExecuted has drop, store {
+        series_id: u64,
+        price: u64,
+        size: u64,
+        maker: address,
+        taker: address,
+        taker_side: u8,
+    }
+
     public(friend) fun emit_deposited(trader: address, amount: u64) {
         event::emit(Deposited { trader, amount });
     }
@@ -82,5 +122,29 @@ module zero_day_futures::events {
             series_id, trader, side, size, entry_price, margin,
             realized_pnl_is_negative, realized_pnl_magnitude, reason,
         });
+    }
+
+    public(friend) fun emit_order_placed(
+        order_id: u64,
+        series_id: u64,
+        trader: address,
+        side: u8,
+        price: u64,
+        size: u64,
+        remaining: u64,
+        tif: u8,
+        reduce_only: bool,
+    ) {
+        event::emit(OrderPlaced { order_id, series_id, trader, side, price, size, remaining, tif, reduce_only });
+    }
+
+    public(friend) fun emit_order_updated(order_id: u64, remaining: u64, status: u8) {
+        event::emit(OrderUpdated { order_id, remaining, status });
+    }
+
+    public(friend) fun emit_trade_executed(
+        series_id: u64, price: u64, size: u64, maker: address, taker: address, taker_side: u8,
+    ) {
+        event::emit(TradeExecuted { series_id, price, size, maker, taker, taker_side });
     }
 }

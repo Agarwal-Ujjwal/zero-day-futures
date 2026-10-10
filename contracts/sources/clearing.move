@@ -15,7 +15,7 @@ module zero_day_futures::clearing {
     use zero_day_futures::position::{Self, Position};
     use zero_day_futures::vault;
 
-    // friend zero_day_futures::matching; // added once matching.move exists.
+    friend zero_day_futures::matching;
 
     /// Applies one fill to `trader`'s position on `series_id`.
     ///

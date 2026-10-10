@@ -38,6 +38,12 @@ module zero_day_futures::config {
     /// `series::create_series`, not this constant.
     const SERIES_DURATION_SECONDS: u64 = 86_400;
 
+    /// Caps on order-book usage per transaction / per account, so neither a
+    /// single match nor a single account's resting orders can make a
+    /// transaction's gas cost unbounded.
+    const MAX_FILLS_PER_ORDER: u64 = 10;
+    const MAX_OPEN_ORDERS_PER_SERIES: u64 = 20;
+
     // ---------------------------------------------------------------------
     // Abort codes (docs/spec/abort-codes.md) - grouped by the module that raises
     // them. Keep this list and the mirrored map in src/lib/chain/errors.ts in sync.
@@ -59,6 +65,8 @@ module zero_day_futures::config {
     const E_FAUCET_COOLDOWN: u64 = 14;
     const E_UNDERLYING_NOT_REGISTERED: u64 = 15;
     const E_NO_OPEN_POSITION: u64 = 16;
+    const E_ORDER_NOT_FOUND: u64 = 17;
+    const E_NOT_ORDER_OWNER: u64 = 18;
 
     // ---------------------------------------------------------------------
     // Admin capability
@@ -105,6 +113,8 @@ module zero_day_futures::config {
     public fun liquidation_penalty_bps(): u64 { LIQUIDATION_PENALTY_BPS }
     public fun settlement_batch_max(): u64 { SETTLEMENT_BATCH_MAX }
     public fun series_duration_seconds(): u64 { SERIES_DURATION_SECONDS }
+    public fun max_fills_per_order(): u64 { MAX_FILLS_PER_ORDER }
+    public fun max_open_orders_per_series(): u64 { MAX_OPEN_ORDERS_PER_SERIES }
 
     public fun e_not_admin(): u64 { E_NOT_ADMIN }
     public fun e_insufficient_free_balance(): u64 { E_INSUFFICIENT_FREE_BALANCE }
@@ -122,6 +132,8 @@ module zero_day_futures::config {
     public fun e_faucet_cooldown(): u64 { E_FAUCET_COOLDOWN }
     public fun e_underlying_not_registered(): u64 { E_UNDERLYING_NOT_REGISTERED }
     public fun e_no_open_position(): u64 { E_NO_OPEN_POSITION }
+    public fun e_order_not_found(): u64 { E_ORDER_NOT_FOUND }
+    public fun e_not_order_owner(): u64 { E_NOT_ORDER_OWNER }
 
     #[test(deployer = @zero_day_futures)]
     fun test_init_grants_admin_cap(deployer: &signer) {

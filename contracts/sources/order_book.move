@@ -19,12 +19,27 @@ module zero_day_futures::order_book {
     use std::vector;
     use aptos_std::big_ordered_map::{Self, BigOrderedMap};
     use aptos_std::table::{Self, Table};
+    use zero_day_futures::config;
     use zero_day_futures::margin;
 
-    // friend zero_day_futures::matching; // added once matching.move exists.
-    // friend zero_day_futures::orders; // added once orders.move exists.
+    friend zero_day_futures::matching;
+    friend zero_day_futures::orders;
 
     const U64_MAX: u64 = 18446744073709551615;
+
+    /// Order lifecycle states for `OrderUpdated`/`OrderPlaced`. Defined here
+    /// (not in `orders`, which owns the entry points) because `matching` also
+    /// needs them and `orders` will depend on `matching` - putting them in
+    /// `orders` would make that a cycle.
+    const ORDER_STATUS_OPEN: u8 = 0;
+    const ORDER_STATUS_PARTIAL: u8 = 1;
+    const ORDER_STATUS_FILLED: u8 = 2;
+    const ORDER_STATUS_CANCELLED: u8 = 3;
+
+    public fun order_status_open(): u8 { ORDER_STATUS_OPEN }
+    public fun order_status_partial(): u8 { ORDER_STATUS_PARTIAL }
+    public fun order_status_filled(): u8 { ORDER_STATUS_FILLED }
+    public fun order_status_cancelled(): u8 { ORDER_STATUS_CANCELLED }
 
     struct OrderKey has copy, drop, store {
         price_rank: u64,
@@ -52,14 +67,34 @@ module zero_day_futures::order_book {
         asks: BigOrderedMap<OrderKey, RestingOrder>,
     }
 
+    /// Key for the per-(trader, series) count of resting orders, which bounds
+    /// how many orders one account can rest on one series at once.
+    struct OpenCountKey has copy, drop, store {
+        trader: address,
+        series_id: u64,
+    }
+
     struct OrderBookStore has key {
         books: Table<u64, Book>,
         locations: Table<u64, OrderLocation>,
+        open_counts: Table<OpenCountKey, u64>,
     }
 
     /// Runs once at publish time.
     fun init_module(deployer: &signer) {
-        move_to(deployer, OrderBookStore { books: table::new(), locations: table::new() });
+        move_to(deployer, OrderBookStore {
+            books: table::new(),
+            locations: table::new(),
+            open_counts: table::new(),
+        });
+    }
+
+    fun open_count(store: &OrderBookStore, key: OpenCountKey): u64 {
+        if (table::contains(&store.open_counts, key)) {
+            *table::borrow(&store.open_counts, key)
+        } else {
+            0
+        }
     }
 
     fun price_rank(side: u8, price: u64): u64 {
@@ -86,6 +121,11 @@ module zero_day_futures::order_book {
     /// Inserts a new resting order. `side` is the side it rests on - a buy
     /// order among the bids, a sell order among the asks - after matching has
     /// already consumed whatever it could against the opposite side.
+    ///
+    /// Aborts with `E_OPEN_ORDER_CAP_EXCEEDED` if `trader` already has
+    /// `config::max_open_orders_per_series()` resting orders on `series_id` -
+    /// the per-account, per-series bound that keeps the book's size, and so
+    /// matching's gas cost, from growing without limit.
     public(friend) fun insert(
         series_id: u64,
         side: u8,
@@ -96,22 +136,36 @@ module zero_day_futures::order_book {
         reduce_only: bool,
     ) acquires OrderBookStore {
         let store = borrow_global_mut<OrderBookStore>(@zero_day_futures);
-        ensure_book(store, series_id);
-        let book = table::borrow_mut(&mut store.books, series_id);
-        let key = OrderKey { price_rank: price_rank(side, price), order_id };
-        let order = RestingOrder { order_id, trader, price, remaining, reduce_only };
+        let count_key = OpenCountKey { trader, series_id };
+        let current_count = open_count(store, count_key);
+        assert!(current_count < config::max_open_orders_per_series(), config::e_open_order_cap_exceeded());
 
-        big_ordered_map::add(side_map_mut(book, side), key, order);
+        ensure_book(store, series_id);
+        let key = OrderKey { price_rank: price_rank(side, price), order_id };
+        {
+            let book = table::borrow_mut(&mut store.books, series_id);
+            let order = RestingOrder { order_id, trader, price, remaining, reduce_only };
+            big_ordered_map::add(side_map_mut(book, side), key, order);
+        };
         table::upsert(&mut store.locations, order_id, OrderLocation { series_id, side, key });
+        table::upsert(&mut store.open_counts, count_key, current_count + 1);
     }
 
     /// Removes an order entirely - used for a full fill or a cancel.
     public(friend) fun remove(order_id: u64) acquires OrderBookStore {
         let store = borrow_global_mut<OrderBookStore>(@zero_day_futures);
         let location = *table::borrow(&store.locations, order_id);
-        let book = table::borrow_mut(&mut store.books, location.series_id);
-        big_ordered_map::remove(side_map_mut(book, location.side), &location.key);
+        let trader = {
+            let book = table::borrow_mut(&mut store.books, location.series_id);
+            let order = *big_ordered_map::borrow(side_map(book, location.side), &location.key);
+            big_ordered_map::remove(side_map_mut(book, location.side), &location.key);
+            order.trader
+        };
         table::remove(&mut store.locations, order_id);
+
+        let count_key = OpenCountKey { trader, series_id: location.series_id };
+        let current_count = open_count(store, count_key);
+        table::upsert(&mut store.open_counts, count_key, current_count - 1);
     }
 
     /// Reduces a resting order's remaining size after a partial fill. Its
@@ -133,6 +187,31 @@ module zero_day_futures::order_book {
     #[view]
     public fun exists_order(order_id: u64): bool acquires OrderBookStore {
         table::contains(&borrow_global<OrderBookStore>(@zero_day_futures).locations, order_id)
+    }
+
+    /// The series a resting order belongs to. `orders::cancel_order` uses this
+    /// instead of trusting a caller-supplied series id, which could (by
+    /// mistake or otherwise) name the wrong series for a real order id.
+    public fun series_id_of_order(order_id: u64): u64 acquires OrderBookStore {
+        table::borrow(&borrow_global<OrderBookStore>(@zero_day_futures).locations, order_id).series_id
+    }
+
+    /// Looks up one specific resting order by id - unlike `best`, this does
+    /// not have to be the top of its book. `orders::cancel_order` uses this,
+    /// since it needs the exact order the caller named, not whichever is best.
+    public fun get_order(order_id: u64): Option<RestingOrder> acquires OrderBookStore {
+        let store = borrow_global<OrderBookStore>(@zero_day_futures);
+        if (!table::contains(&store.locations, order_id)) {
+            return option::none()
+        };
+        let location = table::borrow(&store.locations, order_id);
+        let book = table::borrow(&store.books, location.series_id);
+        option::some(*big_ordered_map::borrow(side_map(book, location.side), &location.key))
+    }
+
+    #[view]
+    public fun get_open_order_count(trader: address, series_id: u64): u64 acquires OrderBookStore {
+        open_count(borrow_global<OrderBookStore>(@zero_day_futures), OpenCountKey { trader, series_id })
     }
 
     /// The best (lowest-price ask / highest-price bid) resting order on
@@ -297,5 +376,43 @@ module zero_day_futures::order_book {
         assert!(vector::is_empty(&bid_sizes), 1);
         assert!(vector::is_empty(&ask_prices), 2);
         assert!(vector::is_empty(&ask_sizes), 3);
+    }
+
+    #[test(deployer = @zero_day_futures)]
+    fun test_get_order_finds_a_non_best_order(deployer: &signer) acquires OrderBookStore {
+        init_module_for_test(deployer);
+        insert(1, margin::side_long(), 1, @0xCAFE, 65_000, 10, false);
+        insert(1, margin::side_long(), 2, @0xCAFE, 60_000, 10, false); // not the best bid
+
+        let found = get_order(2);
+        assert!(option::is_some(&found), 0);
+        let order = option::extract(&mut found);
+        assert!(price_of(&order) == 60_000, 1);
+    }
+
+    #[test(deployer = @zero_day_futures)]
+    fun test_remove_decrements_open_order_count(deployer: &signer) acquires OrderBookStore {
+        init_module_for_test(deployer);
+        let trader = @0xCAFE;
+        insert(1, margin::side_long(), 1, trader, 65_000, 10, false);
+        insert(1, margin::side_long(), 2, trader, 64_000, 10, false);
+        assert!(get_open_order_count(trader, 1) == 2, 0);
+
+        remove(1);
+        assert!(get_open_order_count(trader, 1) == 1, 1);
+    }
+
+    #[test(deployer = @zero_day_futures)]
+    #[expected_failure(abort_code = 12, location = Self)] // config::E_OPEN_ORDER_CAP_EXCEEDED
+    fun test_insert_enforces_open_order_cap(deployer: &signer) acquires OrderBookStore {
+        init_module_for_test(deployer);
+        let trader = @0xCAFE;
+        let max = config::max_open_orders_per_series();
+        let i = 0;
+        while (i < max) {
+            insert(1, margin::side_long(), i + 1, trader, 65_000 - i, 10, false);
+            i = i + 1;
+        };
+        insert(1, margin::side_long(), max + 1, trader, 1, 10, false);
     }
 }

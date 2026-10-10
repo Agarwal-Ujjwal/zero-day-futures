@@ -14,10 +14,9 @@ module zero_day_futures::vault {
     use zero_day_futures::events;
 
     friend zero_day_futures::clearing;
-    // `friend` declarations for `orders`, `liquidation` and `settlement` are
-    // added here as each of those modules is implemented - Move rejects a
-    // `friend` declaration for a module that doesn't exist yet, and none of
-    // them do, this early in the build order.
+    friend zero_day_futures::orders;
+    // `friend` declarations for `liquidation` and `settlement` are added here
+    // once those modules exist.
 
     /// Fixed seed for the named object that owns the pooled custody store, so its
     /// address can always be re-derived from `@zero_day_futures`.
