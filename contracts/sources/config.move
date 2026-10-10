@@ -56,6 +56,7 @@ module zero_day_futures::config {
     const E_BATCH_TOO_LARGE: u64 = 11;
     const E_OPEN_ORDER_CAP_EXCEEDED: u64 = 12;
     const E_FILLS_CAP_EXCEEDED: u64 = 13;
+    const E_FAUCET_COOLDOWN: u64 = 14;
 
     // ---------------------------------------------------------------------
     // Admin capability
@@ -108,6 +109,7 @@ module zero_day_futures::config {
     public fun e_batch_too_large(): u64 { E_BATCH_TOO_LARGE }
     public fun e_open_order_cap_exceeded(): u64 { E_OPEN_ORDER_CAP_EXCEEDED }
     public fun e_fills_cap_exceeded(): u64 { E_FILLS_CAP_EXCEEDED }
+    public fun e_faucet_cooldown(): u64 { E_FAUCET_COOLDOWN }
 
     #[test(deployer = @zero_day_futures)]
     fun test_init_grants_admin_cap(deployer: &signer) {
