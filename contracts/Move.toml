@@ -1,0 +1,17 @@
+[package]
+name = "zero_day_futures"
+version = "1.0.0"
+authors = []
+
+[addresses]
+zero_day_futures = "_"
+
+[dev-addresses]
+zero_day_futures = "0xA11CE"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework.git"
+rev = "testnet"
+subdir = "aptos-framework"
+
+[dev-dependencies]
