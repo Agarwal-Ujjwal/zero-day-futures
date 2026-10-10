@@ -32,10 +32,18 @@ expiry exactly like all others.
 
 ## Settlement payout
 
-`payout = max(0, margin + PnL)`. Shortfalls (payout would be negative) are drawn from the
-insurance fund. If the fund itself is empty, the shortfall is recorded as bad debt — auto-
-deleveraging to redistribute that debt is explicitly P2 and out of scope; this is a documented
-residual risk to state in the demo.
+`payout = max(0, margin + PnL)` (`margin::settlement_payout`), credited straight to the trader's
+vault free balance. The floor at zero *is* the shortfall mechanism: a position's payout can never
+exceed its own margin plus gain, so `settlement.move` never needs to draw from the insurance fund
+or reason about any other trader's position to settle one trader - consistent with "the contract
+never iterates over all positions." A trader whose loss would have exceeded their margin instead
+loses it entirely and owes nothing further; auto-deleveraging to redistribute that gap onto winners
+is explicitly P2 and out of scope. In practice this gap should be rare, since `liquidation.move`
+closes a position once its equity falls under the 5% maintenance threshold, well before a loss
+could exceed the margin backing it - but a sufficiently fast price move between keeper ticks could
+still outrun liquidation. This, plus the per-fill floor already documented in `clearing.move`'s
+`reduce_or_close`, are this project's two accepted "bad debt" residual risks; both are a deliberate
+simplification for an MVP, not an oversight, and should be named explicitly in any demo or writeup.
 
 ## Expiry and settlement timing
 

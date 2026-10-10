@@ -15,8 +15,8 @@ module zero_day_futures::vault {
 
     friend zero_day_futures::clearing;
     friend zero_day_futures::orders;
-    // `friend` declarations for `liquidation` and `settlement` are added here
-    // once those modules exist.
+    friend zero_day_futures::liquidation;
+    friend zero_day_futures::settlement;
 
     /// Fixed seed for the named object that owns the pooled custody store, so its
     /// address can always be re-derived from `@zero_day_futures`.

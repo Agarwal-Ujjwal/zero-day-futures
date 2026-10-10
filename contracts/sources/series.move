@@ -15,7 +15,7 @@ module zero_day_futures::series {
     use zero_day_futures::config;
     use zero_day_futures::events;
 
-    // friend zero_day_futures::settlement; // added once settlement.move exists.
+    friend zero_day_futures::settlement;
 
     /// One entry per underlying the admin has approved for trading. Tracks the
     /// Pyth feed to use and the most recently created series, so `roll_series`

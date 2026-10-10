@@ -16,6 +16,8 @@ module zero_day_futures::clearing {
     use zero_day_futures::vault;
 
     friend zero_day_futures::matching;
+    friend zero_day_futures::liquidation;
+    friend zero_day_futures::settlement;
 
     /// Applies one fill to `trader`'s position on `series_id`.
     ///
@@ -118,11 +120,7 @@ module zero_day_futures::clearing {
 
         let margin_share = (((current_margin as u128) * (fill_size as u128)) / (current_size as u128)) as u64;
         let (fill_is_loss, fill_pnl_magnitude) = margin::pnl(entry_price, fill_price, fill_size, side);
-        let payout = if (fill_is_loss) {
-            if (fill_pnl_magnitude <= margin_share) { margin_share - fill_pnl_magnitude } else { 0 }
-        } else {
-            margin_share + fill_pnl_magnitude
-        };
+        let payout = floor_payout(margin_share, fill_is_loss, fill_pnl_magnitude);
         vault::unlock_margin(trader, payout);
 
         let (old_pnl_is_negative, old_pnl_magnitude) = position::realized_pnl_of(current);
@@ -136,6 +134,51 @@ module zero_day_futures::clearing {
             side, new_size, entry_price, current_margin - margin_share,
             new_pnl_is_negative, new_pnl_magnitude, status,
         )
+    }
+
+    /// `margin_share + PnL`, floored at zero - the gross amount a trader (or,
+    /// for `close_for_liquidation`, the trader *and* the insurance fund
+    /// between them) receives when closing all or part of a position.
+    fun floor_payout(margin_share: u64, pnl_is_loss: bool, pnl_magnitude: u64): u64 {
+        if (pnl_is_loss) {
+            if (pnl_magnitude <= margin_share) { margin_share - pnl_magnitude } else { 0 }
+        } else {
+            margin_share + pnl_magnitude
+        }
+    }
+
+    /// Force-closes `trader`'s entire position on `series_id` at
+    /// `index_price`, for `liquidation::liquidate`. Returns `(side, size,
+    /// gross_payout)` - the side and size the insurance fund should absorb as
+    /// its own backstop position, and the gross payout (margin + PnL, floored
+    /// at zero) for `liquidation` to split between the insurance-fund penalty
+    /// and whatever's left for the trader.
+    ///
+    /// Unlike `apply_fill`, this never touches the vault itself - liquidation
+    /// penalties are not this module's concern, so the caller decides what to
+    /// do with the payout instead of it landing unconditionally in the
+    /// trader's free balance.
+    public(friend) fun close_for_liquidation(trader: address, series_id: u64, index_price: u64): (u8, u64, u64) {
+        let current = position::get_position(trader, series_id);
+        let side = position::side_of(&current);
+        let size = position::size_of(&current);
+        let margin_amount = position::margin_of(&current);
+        let entry_price = position::entry_price_of(&current);
+
+        let (fill_is_loss, fill_pnl_magnitude) = margin::pnl(entry_price, index_price, size, side);
+        let gross_payout = floor_payout(margin_amount, fill_is_loss, fill_pnl_magnitude);
+
+        let (old_pnl_is_negative, old_pnl_magnitude) = position::realized_pnl_of(&current);
+        let (new_pnl_is_negative, new_pnl_magnitude) =
+            margin::combine_signed(old_pnl_is_negative, old_pnl_magnitude, fill_is_loss, fill_pnl_magnitude);
+
+        let closed = position::new_position(
+            side, 0, entry_price, 0, new_pnl_is_negative, new_pnl_magnitude, position::status_liquidated(),
+        );
+        position::upsert_position(trader, series_id, closed);
+        emit_position_updated(series_id, trader, &closed, position::reason_liquidation());
+
+        (side, size, gross_payout)
     }
 
     fun emit_position_updated(series_id: u64, trader: address, position: &Position, reason: u8) {

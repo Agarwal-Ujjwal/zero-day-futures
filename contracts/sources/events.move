@@ -12,6 +12,8 @@ module zero_day_futures::events {
     friend zero_day_futures::clearing;
     friend zero_day_futures::orders;
     friend zero_day_futures::matching;
+    friend zero_day_futures::liquidation;
+    friend zero_day_futures::settlement;
 
     #[event]
     /// A trader moved collateral from their own wallet into vault custody.
@@ -93,6 +95,18 @@ module zero_day_futures::events {
         taker_side: u8,
     }
 
+    #[event]
+    /// A position was closed by `liquidation::liquidate` rather than by its
+    /// own trader. `price` is the index price it closed at; `penalty` is the
+    /// share of the gross payout redirected to the insurance fund instead of
+    /// back to the trader.
+    struct Liquidated has drop, store {
+        trader: address,
+        series_id: u64,
+        price: u64,
+        penalty: u64,
+    }
+
     public(friend) fun emit_deposited(trader: address, amount: u64) {
         event::emit(Deposited { trader, amount });
     }
@@ -146,5 +160,9 @@ module zero_day_futures::events {
         series_id: u64, price: u64, size: u64, maker: address, taker: address, taker_side: u8,
     ) {
         event::emit(TradeExecuted { series_id, price, size, maker, taker, taker_side });
+    }
+
+    public(friend) fun emit_liquidated(trader: address, series_id: u64, price: u64, penalty: u64) {
+        event::emit(Liquidated { trader, series_id, price, penalty });
     }
 }

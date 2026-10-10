@@ -11,8 +11,7 @@ module zero_day_futures::position {
     use zero_day_futures::margin;
 
     friend zero_day_futures::clearing;
-    // friend zero_day_futures::liquidation; // added once liquidation.move exists.
-    // friend zero_day_futures::settlement; // added once settlement.move exists.
+    friend zero_day_futures::settlement;
 
     const STATUS_OPEN: u8 = 0;
     const STATUS_CLOSED: u8 = 1;

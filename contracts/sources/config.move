@@ -109,6 +109,12 @@ module zero_day_futures::config {
     // another module needs is exposed through one of these instead.
     // ---------------------------------------------------------------------
 
+    /// The insurance fund's identity as a position-table "trader" - there is
+    /// no real account behind it, so it borrows the package's own address.
+    /// Backstop positions absorbed from liquidations settle through this
+    /// address like any other trader's at expiry (docs/spec/business-rules.md).
+    public fun insurance_fund_address(): address { @zero_day_futures }
+
     public fun price_unit(): u64 { PRICE_UNIT }
     public fun lot_unit(): u64 { LOT_UNIT }
     public fun collateral_decimals(): u8 { COLLATERAL_DECIMALS }
