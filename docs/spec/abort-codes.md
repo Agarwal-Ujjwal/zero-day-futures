@@ -28,6 +28,7 @@ update this table in the same commit as any change to the Move enum.
 | `E_NO_OPEN_POSITION` | `clearing::add_margin` | Caller has no open position on this series to add margin to |
 | `E_ORDER_NOT_FOUND` | `orders::cancel_order` | No resting order with this id (already filled or already cancelled) |
 | `E_NOT_ORDER_OWNER` | `orders::cancel_order` | Caller is not the order's trader, and the series has not expired (anyone may cancel on an expired series) |
+| `E_NOT_KEEPER` | `oracle::post_price` | Caller is not the account currently authorized to post prices (see `oracle::set_keeper`) |
 
 ## Convention
 

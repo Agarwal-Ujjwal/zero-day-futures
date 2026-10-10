@@ -306,3 +306,19 @@ versions together.
   directive with a short custom `cacheLife` profile. `src/lib/api/cache.ts` is the single place
   that defines this profile.
 - Package manager is **pnpm** (see `pnpm-workspace.yaml` / `pnpm-lock.yaml`), not npm.
+- **Pyth is discontinued on Aptos.** Verified directly against Pyth's own docs: Pyth Core stopped
+  supporting Aptos entirely on 2026-08-26 ("Pyth Core no longer supports Aptos... no longer
+  maintains contracts or an integration guide for Aptos") - this is a full discontinuation, not
+  the API-key friction the original plan anticipated. Two real decentralized oracles are live on
+  Aptos today, Chainlink Data Feeds and Supra, but this project uses the plan's own pre-approved
+  fallback instead: `oracle.move` takes a push model, where a keeper account posts a price it
+  fetched off-chain via `post_price`, and `liquidate`/`settle_positions` read it back through
+  `get_price_no_older_than` (same name and staleness-check shape Pyth's own API used, so a real
+  oracle could replace this module's internals later without touching any caller). The keeper's
+  posting authority is a separate, admin-rotatable role (`oracle::set_keeper`), never the admin
+  capability itself, so the keeper key can live on Vercel the way the architecture always intended.
+  **Trade-off, stated plainly:** the index price is only as trustworthy as the keeper account that
+  posts it - a compromised keeper key cannot move funds, but could post a false price and trigger
+  a wrongful liquidation or settlement. This is a weaker guarantee than a verified Pyth attestation
+  and is a deliberate, documented choice for build speed, not an oversight. `PYTH_API_KEY` and
+  `@pythnetwork/hermes-client` are no longer part of this design; see `.env.example`.

@@ -44,6 +44,12 @@ module zero_day_futures::config {
     const MAX_FILLS_PER_ORDER: u64 = 10;
     const MAX_OPEN_ORDERS_PER_SERIES: u64 = 20;
 
+    /// Default staleness bound for a keeper-posted oracle price (see
+    /// `oracle.move` - Pyth no longer supports Aptos, so this project's index
+    /// price is posted on-chain by the keeper instead of pulled from a
+    /// cross-chain attestation). A bit more than one keeper tick interval.
+    const ORACLE_MAX_PRICE_AGE_SECONDS: u64 = 90;
+
     // ---------------------------------------------------------------------
     // Abort codes (docs/spec/abort-codes.md) - grouped by the module that raises
     // them. Keep this list and the mirrored map in src/lib/chain/errors.ts in sync.
@@ -67,6 +73,7 @@ module zero_day_futures::config {
     const E_NO_OPEN_POSITION: u64 = 16;
     const E_ORDER_NOT_FOUND: u64 = 17;
     const E_NOT_ORDER_OWNER: u64 = 18;
+    const E_NOT_KEEPER: u64 = 19;
 
     // ---------------------------------------------------------------------
     // Admin capability
@@ -115,6 +122,7 @@ module zero_day_futures::config {
     public fun series_duration_seconds(): u64 { SERIES_DURATION_SECONDS }
     public fun max_fills_per_order(): u64 { MAX_FILLS_PER_ORDER }
     public fun max_open_orders_per_series(): u64 { MAX_OPEN_ORDERS_PER_SERIES }
+    public fun oracle_max_price_age_seconds(): u64 { ORACLE_MAX_PRICE_AGE_SECONDS }
 
     public fun e_not_admin(): u64 { E_NOT_ADMIN }
     public fun e_insufficient_free_balance(): u64 { E_INSUFFICIENT_FREE_BALANCE }
@@ -134,6 +142,7 @@ module zero_day_futures::config {
     public fun e_no_open_position(): u64 { E_NO_OPEN_POSITION }
     public fun e_order_not_found(): u64 { E_ORDER_NOT_FOUND }
     public fun e_not_order_owner(): u64 { E_NOT_ORDER_OWNER }
+    public fun e_not_keeper(): u64 { E_NOT_KEEPER }
 
     #[test(deployer = @zero_day_futures)]
     fun test_init_grants_admin_cap(deployer: &signer) {
